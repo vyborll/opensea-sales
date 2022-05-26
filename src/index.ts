@@ -1,27 +1,35 @@
 import 'dotenv/config';
-import { BigNumber, utils } from 'ethers';
+import express from 'express';
+import http from 'http';
+import WebSocket from 'ws';
 
-import web3 from './providers/web3';
-import contract from './contract/opensea';
+import { fetchSales } from './lib/sales';
+
+const HTTP_PORT: number = parseInt(process.env.HTTP_PORT || '3000');
 
 async function main() {
-	const latestBlock = await web3.getBlockNumber();
+	const app = express();
+	const server = http.createServer(app);
+	const wss = new WebSocket.Server({ noServer: true });
 
-	const filterFrom = contract.filters.OrdersMatched();
-	const orders = await contract.queryFilter(filterFrom, latestBlock);
-
-	for (const order of orders) {
-		if (!order.args) continue;
-		const { transactionHash } = order;
-		const { maker, taker, price } = order.args;
-
-		console.log({
-			transactionHash,
-			maker,
-			taker,
-			price: utils.formatEther(price as BigNumber),
+	server.on('upgrade', (request, socket, head) => {
+		wss.handleUpgrade(request, socket, head, (ws) => {
+			wss.emit('connection', ws, request);
 		});
-	}
+	});
+
+	wss.on('connection', (ws, request) => {
+		wss.on('message', (message) => console.log(message));
+	});
+
+	setInterval(async () => {
+		const sales = await fetchSales();
+		wss.clients.forEach((client) => client.send(JSON.stringify(sales)));
+	}, 20000);
+
+	server.listen(HTTP_PORT, () => {
+		console.log(`Server is listening on port ${HTTP_PORT}`);
+	});
 }
 
 main();
