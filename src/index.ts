@@ -24,6 +24,7 @@ async function main() {
 
 	setInterval(async () => {
 		const sales = await fetchSales();
+		sales.map((sale) => console.log(sale));
 		wss.clients.forEach((client) => client.send(JSON.stringify(sales)));
 	}, 20000);
 
